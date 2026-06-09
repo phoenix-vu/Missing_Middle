@@ -1,5 +1,5 @@
 **************************************************************************
-*** Preparing county level permit data 			   
+*** 				Preparing county level permit data 			   
 **************************************************************************
 
 *2025 
@@ -186,7 +186,7 @@ keep statefips countyfips scfips region county mm15 tot15 pmm15
 save co2015a.dta, replace 
 
 **********************************************************************
-*** Merging and Cleaning 			       
+*** 						Merging and Cleaning 			       
 **********************************************************************
 * Merging 
 use co2015a.dta, clear 
@@ -204,7 +204,7 @@ save county15to25.dta, replace
 * 29 county changes total 
 
 ***********************************************************************
-*** Create total county housing production
+* 				Create total county housing production
 ***********************************************************************
 * Create county totals 
 use county15to25.dta, clear 
@@ -231,7 +231,7 @@ drop state_total
 save county15to25.dta, replace
 
 ***********************************************************************
-*** County to CBSA crosswalk						
+*** 					County to CBSA crosswalk						
 ***********************************************************************
 * Prep
 import excel "list1_2023.xlsx", firstrow cellrange(A3) clear 
@@ -262,26 +262,34 @@ egen cbsa_tot = rowtotal(tot*)
 gen cbsa_pmm = cbsa_mm / cbsa_tot
 order cbsa_mm cbsa_tot cbsa_pmm, after(cbsacode)
 
-* Drop places that didn't build at least 1 mm in every year 
+* Bayes shrinkage toward the national average aka weighting by permit volume 
+summarize cbsa_pmm [aweight=cbsa_tot]
+scalar nat_mean = r(mean)
+summarize cbsa_tot, detail
+scalar k = r(p25)
+gen pmm_shrunk = (cbsa_tot / (cbsa_tot + k)) * cbsa_pmm + ///
+                 (k        / (cbsa_tot + k)) * nat_mean, after(cbsa_tot)
+
+* Drop places that didn't build at least 1 mm in every year - my threshold 
 egen threshold = anymatch(mm*), values(0)
-drop if threshold==1 
+drop if threshold == 1 
 drop threshold 
-gsort -cbsa_p 
-save cbsa15to25.dta, replace 
+save cbsa15to25.dta, replace
 * Results in missing middle production for 299 CBSAs, 2015-2025
 
 *************************************************************************
-*** Top 10 CBSAs   						   
+*** 							Top 10 CBSAs   						   
 *************************************************************************
 
 use cbsa15to25.dta, clear 
+gsort -pmm_shrunk
 drop in 11/l
-keep cbsatitle cbsa_pmm cbsa_mm cbsa_tot 
+keep cbsatitle cbsa_pmm cbsa_mm cbsa_tot pmm_shrunk 
 save top10cbsa.dta, replace 
 export excel using "top10cbsa.xlsx", firstrow(variables) replace 
 
 **************************************************************************
-*** Select metro areas with the national median 
+*** 				Select metro areas with the national median 
 **************************************************************************
 * Selecting metros 
 use cbsa15to25.dta, clear  
@@ -307,7 +315,7 @@ save selectandnational.dta, replace
 export excel using "selectandnational.xlsx", firstrow(variables) replace
 
 **************************************************************************
-*** County level map  
+*** 						County level map  
 **************************************************************************
 * Prep for DataWrapper map 
 import delimited "available-keys.csv", varnames(1) clear  
@@ -325,7 +333,7 @@ save countymapname.dta, replace
 export excel using "countymapname.xlsx", firstrow(variables) replace
 
 ***************************************************************************
-*** Top 10 fasting building CBSAs 
+*** 					Top 10 fasting building CBSAs 
 ***************************************************************************
 * Sort CBSAs by permits 
 use cbsa15to25.dta, clear 
